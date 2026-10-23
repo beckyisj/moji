@@ -57,6 +57,12 @@ final class Settings {
         set { defaults.set(newValue, forKey: "skinTone") }
     }
 
+    /// Re-rank suggestions with Jev when an API key is saved.
+    var jevEnabled: Bool {
+        get { defaults.object(forKey: "jevEnabled") as? Bool ?? true }
+        set { defaults.set(newValue, forKey: "jevEnabled") }
+    }
+
     /// Letters to type after ":" before the popup appears.
     var minChars: Int {
         get { defaults.object(forKey: "minChars") as? Int ?? 2 }

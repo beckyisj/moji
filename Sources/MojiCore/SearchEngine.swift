@@ -198,6 +198,15 @@ public final class SearchEngine {
         return hits
     }
 
+    /// The most-used emoji, most popular first.
+    public var popularEmoji: [Emoji] {
+        Popularity.ranked.compactMap { emoji(for: $0) }
+    }
+
+    public func emoji(for char: String) -> Emoji? {
+        entriesByKey[Self.normalize(char)]?.first.map { emoji[$0] }
+    }
+
     /// An exact shortcode hit, used when someone types the closing colon (":tada:").
     public func exactShortcode(_ query: String) -> Emoji? {
         let q = query.lowercased()

@@ -21,11 +21,19 @@ final class Controller {
     /// True until the first caret/tab lookup lands; the popup waits so it never flashes on Slack web etc.
     private var lookupPending = false
     private let axQueue = DispatchQueue(label: "moji.ax")
+
+    // Jev re-ranking: local results show instantly, Jev's order replaces them ~a beat later.
+    private var jevClient: JevClient?
+    private var jevCache: [String: JevRanking] = [:]
+    private var jevWork: DispatchWorkItem?
+    private var jevTask: Task<Void, Never>?
+    private var localResults: [SearchResult] = []
     private var swallowedKeyUps = Set<Int64>()
 
     init(engine: SearchEngine) {
         self.engine = engine
         engine.usageBoost = { [usage] in usage.boost(for: $0) }
+        reloadJev()
         popup.onPick = { [weak self] index in
             guard let self, index < self.results.count else { return }
             self.commit(self.results[index].emoji)
@@ -39,6 +47,16 @@ final class Controller {
     }
 
     var isRunning: Bool { tap != nil }
+
+    /// Picks up a newly saved/removed key or the on/off toggle.
+    func reloadJev() {
+        jevCache = [:]
+        if Settings.shared.jevEnabled, let key = JevKeychain.read() {
+            jevClient = JevClient(apiKey: key)
+        } else {
+            jevClient = nil
+        }
+    }
 
     /// Needs Accessibility permission; returns false until it's granted.
     @discardableResult
@@ -244,14 +262,52 @@ final class Controller {
         }
         if query != shownQuery { selection = 0 }
         shownQuery = query
-        results = engine.search(query, limit: 8)
+        localResults = engine.search(query, limit: 8)
+        results = jevCache[query].map { engine.merge(local: localResults, jev: $0) } ?? localResults
         selection = min(selection, max(results.count - 1, 0))
+        scheduleJev()
         guard !results.isEmpty else {
             popup.hide()
             return
         }
         showPopup()
         retryCaret()
+    }
+
+    /// Asks Jev once typing pauses briefly; a newer keystroke cancels the pending or in-flight call.
+    private func scheduleJev() {
+        jevWork?.cancel()
+        jevTask?.cancel()
+        guard let client = jevClient, query.count >= 3, jevCache[query] == nil else { return }
+        let q = query
+        let work = DispatchWorkItem { [weak self] in
+            guard let self, self.capturing, self.query == q else { return }
+            let candidates = self.engine.jevCandidates(q)
+            self.jevTask = Task { @MainActor [weak self] in
+                do {
+                    let ranking = try await client.rank(query: q, candidates: candidates)
+                    self?.applyJev(ranking, for: q)
+                } catch is CancellationError {
+                } catch let error as URLError where error.code == .cancelled {
+                } catch {
+                    mojiLog("jev: \(error)")
+                }
+            }
+        }
+        jevWork = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.15, execute: work)
+    }
+
+    private func applyJev(_ ranking: JevRanking, for q: String) {
+        jevCache[q] = ranking
+        if jevCache.count > 200 { jevCache.removeAll() }
+        guard capturing, query == q, !localResults.isEmpty || !ranking.probabilities.isEmpty else { return }
+        // Keep what the user arrowed to, if they already moved off the top row.
+        let picked = selection > 0 && selection < results.count ? results[selection].emoji.char : nil
+        results = engine.merge(local: localResults, jev: ranking)
+        selection = picked.flatMap { char in results.firstIndex { $0.emoji.char == char } } ?? 0
+        guard !results.isEmpty else { return }
+        showPopup()
     }
 
     private func showPopup() {
@@ -270,6 +326,9 @@ final class Controller {
     }
 
     func reset() {
+        jevWork?.cancel()
+        jevTask?.cancel()
+        localResults = []
         capturing = false
         query = ""
         shownQuery = ""

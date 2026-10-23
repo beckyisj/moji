@@ -13,6 +13,21 @@ Search runs entirely on your Mac, with no API calls. Layers, strongest first:
 - **Related words**: Apple's on-device word embeddings, so `woohoo` → 🎉, and `doggo` backs off to 🐶
 - **Popularity and frecency**: common emoji rank first, and the ones you pick float up over time
 
+### Optional: smart ranking with Jev
+
+With a [TypeSafe](https://typesafe.ai) API key, Moji also asks [Jev](https://typesafe.ai/blog/introducing-system-one-models-and-jev) which emoji you mean. Suggestions appear instantly from local search, and Jev's order replaces them a moment later. Jev gets one Choice question over about 200 candidates: the local matches plus the most-used emoji. Rows Jev moved up show **✦ Jev**. An exact shortcode (`:tada`) always stays on top.
+
+- **Setup:** menu bar → Jev → Set API Key… Moji stores the key in your login Keychain.
+- **What's sent:** only the letters after the `:`, and only after a short pause in typing, for 3+ letters.
+- **Cost:** about 2k input tokens per lookup, roughly $0.0001 at Jev's $0.042 per million tokens.
+- **Fallback:** no key, offline or an error, and you just get the local ranking.
+
+Compare the two rankings from the terminal:
+
+```bash
+swift run moji-search --jev awkward ship_it proud nervous cozy
+```
+
 It stays out of the way:
 
 - **Not in the middle of a word:** `:` only triggers after a space, punctuation or the start of a field, so `10:30`, `https:` and `:D` are left alone.

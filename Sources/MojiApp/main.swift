@@ -97,6 +97,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         triggerItem.submenu = triggerMenu
         menu.addItem(triggerItem)
 
+        let jevMenu = NSMenu()
+        let hasKey = JevKeychain.read() != nil
+        let jevOn = item("Smart Ranking with Jev", #selector(toggleJev))
+        jevOn.state = hasKey && Settings.shared.jevEnabled ? .on : .off
+        jevOn.isEnabled = hasKey
+        jevMenu.addItem(jevOn)
+        jevMenu.addItem(.separator())
+        jevMenu.addItem(item(hasKey ? "Replace API Key…" : "Set API Key…", #selector(setJevKey)))
+        if hasKey { jevMenu.addItem(item("Remove API Key", #selector(removeJevKey))) }
+        let jevItem = NSMenuItem(title: "Jev", action: nil, keyEquivalent: "")
+        jevItem.submenu = jevMenu
+        menu.addItem(jevItem)
+
         let login = item("Open at Login", #selector(toggleLogin))
         login.state = SMAppService.mainApp.status == .enabled ? .on : .off
         menu.addItem(login)
@@ -124,6 +137,42 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     @objc private func setTone(_ sender: NSMenuItem) { Settings.shared.skinTone = sender.tag }
     @objc private func setMinChars(_ sender: NSMenuItem) { Settings.shared.minChars = sender.tag }
+
+    @objc private func toggleJev() {
+        Settings.shared.jevEnabled.toggle()
+        controller.reloadJev()
+    }
+
+    /// The key is typed here by the user and goes straight into the Keychain.
+    @objc private func setJevKey() {
+        let alert = NSAlert()
+        alert.messageText = "TypeSafe API key for Jev"
+        alert.informativeText = "Moji sends only the letters you type after \":\" to Jev to rank emoji. "
+            + "The key is stored in your login Keychain. Get one at console.typesafe.ai."
+        let field = NSSecureTextField(frame: NSRect(x: 0, y: 0, width: 300, height: 24))
+        field.placeholderString = "API key"
+        alert.accessoryView = field
+        alert.addButton(withTitle: "Save")
+        alert.addButton(withTitle: "Cancel")
+        NSApp.activate(ignoringOtherApps: true)
+        alert.window.initialFirstResponder = field
+        guard alert.runModal() == .alertFirstButtonReturn else { return }
+        let key = field.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !key.isEmpty else { return }
+        if JevKeychain.save(key) {
+            Settings.shared.jevEnabled = true
+            controller.reloadJev()
+        } else {
+            let failed = NSAlert()
+            failed.messageText = "Couldn't save the key to the Keychain"
+            failed.runModal()
+        }
+    }
+
+    @objc private func removeJevKey() {
+        JevKeychain.delete()
+        controller.reloadJev()
+    }
 
     @objc private func toggleLogin() {
         do {

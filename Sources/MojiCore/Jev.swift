@@ -118,14 +118,17 @@ extension SearchEngine {
         var pool: [String: (emoji: Emoji, localReason: String?)] = [:]
         for r in local { pool[r.emoji.char] = (r.emoji, r.reason) }
 
+        // Literal local matches (shortcode/name/keyword/slang) keep real weight; typo and
+        // look-alike guesses ("wholesome" ≈ hole) barely count once Jev has an opinion.
+        let literal = Set(local.filter { $0.reason == nil }.map(\.emoji.char))
         func blended(_ char: String) -> Double {
             let p = jev.probabilities[char] ?? 0
-            let l = localRank[char].map { 1 / Double($0 + 1) } ?? 0
-            return 0.75 * p + 0.25 * l
+            guard let rank = localRank[char] else { return p }
+            return p + (literal.contains(char) ? 0.25 : 0.02) / Double(rank + 1)
         }
 
         var chars = Set(local.map(\.emoji.char))
-        chars.formUnion(jev.probabilities.filter { $0.value >= 0.01 }.keys)
+        chars.formUnion(jev.probabilities.filter { $0.value >= 0.03 }.keys)  // ignore near-zero long-tail picks
         var ranked = chars.sorted { blended($0) > blended($1) }
         if let exact = local.first, exact.score >= 1000, let i = ranked.firstIndex(of: exact.emoji.char) {
             ranked.insert(ranked.remove(at: i), at: 0)

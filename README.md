@@ -1,6 +1,6 @@
 # Moji
 
-A native macOS emoji picker with smarter search. Type `:` and a couple of letters in any app, then pick with ↑ ↓ and ↩ or ⇥. Typing the closing colon on an exact shortcode (`:tada:`) swaps it in straight away.
+A native macOS emoji picker with smarter search, powered by [Jev](https://typesafe.ai/blog/introducing-system-one-models-and-jev). Type `:` and a couple of letters in any app, then pick with ↑ ↓ and ↩ or ⇥. Typing the closing colon on an exact shortcode (`:tada:`) swaps it in straight away.
 
 ## Why it's better
 

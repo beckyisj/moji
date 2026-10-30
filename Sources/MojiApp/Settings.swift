@@ -30,7 +30,7 @@ final class Settings {
 
     /// Web apps with their own picker; matched against the focused browser tab's URL host.
     static let excludedSites = [
-        "slack.com", "discord.com", "github.com", "linear.app", "notion.so", "notion.site",
+        "slack.com", "discord.com", "github.com", "x.com", "twitter.com", "linear.app", "notion.so", "notion.com", "notion.site",
         "web.whatsapp.com", "web.telegram.org", "chat.google.com", "teams.microsoft.com",
         "teams.live.com", "figma.com", "roamresearch.com", "app.asana.com",
     ]
@@ -38,7 +38,7 @@ final class Settings {
     /// Fallback when a browser doesn't expose the URL: tab-title suffixes those sites use.
     static let excludedTitleMarkers = [
         "- slack", "| slack", "discord", "· github", "- github", "linear", "| notion", "- notion",
-        "whatsapp", "telegram", "google chat", "microsoft teams", "– figma", "- figma",
+        " / x", "whatsapp", "telegram", "google chat", "microsoft teams", "– figma", "- figma",
     ]
 
     static let browsers: Set<String> = [
@@ -79,6 +79,23 @@ final class Settings {
         if excluded { add.insert(id); remove.remove(id) } else { add.remove(id); remove.insert(id) }
         defaults.set(Array(add).sorted(), forKey: "userExcluded")
         defaults.set(Array(remove).sorted(), forKey: "userIncluded")
+    }
+
+    /// Sites where Moji stays off: defaults plus the user's own toggles (same override scheme as apps).
+    var excludedSites: Set<String> {
+        Set(Self.excludedSites).union(set("userExcludedSites")).subtracting(set("userIncludedSites"))
+    }
+
+    /// The list entry covering `host` ("github.com" covers "gist.github.com"), if any.
+    func excludedSite(covering host: String) -> String? {
+        excludedSites.first { host == $0 || host.hasSuffix("." + $0) }
+    }
+
+    func setSiteExcluded(_ site: String, _ excluded: Bool) {
+        var add = set("userExcludedSites"), remove = set("userIncludedSites")
+        if excluded { add.insert(site); remove.remove(site) } else { add.remove(site); remove.insert(site) }
+        defaults.set(Array(add).sorted(), forKey: "userExcludedSites")
+        defaults.set(Array(remove).sorted(), forKey: "userIncludedSites")
     }
 
     private func set(_ key: String) -> Set<String> {

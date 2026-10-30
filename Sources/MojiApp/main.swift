@@ -8,6 +8,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var permissionTimer: Timer?
     /// The app that was in front when the menu opened (menu-bar clicks don't activate Moji).
     private var targetApp: NSRunningApplication?
+    /// The site to toggle: the list entry covering the tab ("github.com") or the tab's host itself.
+    private var targetSite: String?
 
     private let tones = ["✋ Default", "✋🏻 Light", "✋🏼 Medium-light", "✋🏽 Medium", "✋🏾 Medium-dark", "✋🏿 Dark"]
 
@@ -27,6 +29,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             mojiLog("tap started=\(controller.start())")
             updateIcon()
             let args = CommandLine.arguments
+            if args.contains("--host-probe") {
+                // Logs which site Moji sees in the front browser tab. Reads only; types nothing.
+                DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+                    let app = NSWorkspace.shared.frontmostApplication
+                    let host = app.flatMap { BrowserTab.currentHost(pid: $0.processIdentifier) }
+                    mojiLog("host-probe app=\(app?.bundleIdentifier ?? "?") host=\(host ?? "nil") off=\(self.controller.frontmostIsExcluded())")
+                }
+            }
             if let i = args.firstIndex(of: "--selftest"), i + 1 < args.count {
                 SelfTest.run(output: args[i + 1], controller: controller)
             }
@@ -72,6 +82,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             let off = item("Off in \(app.localizedName ?? id)", #selector(toggleApp))
             off.state = Settings.shared.excludedApps.contains(id) ? .on : .off
             menu.addItem(off)
+
+            // In a browser, also offer the current website ("Off on x.com").
+            targetSite = nil
+            if Settings.browsers.contains(id), let host = BrowserTab.currentHost(pid: app.processIdentifier) {
+                let covering = Settings.shared.excludedSite(covering: host)
+                targetSite = covering ?? host
+                let site = item("Off on \(covering ?? host)", #selector(toggleSite))
+                site.state = covering != nil ? .on : .off
+                menu.addItem(site)
+            }
         }
         menu.addItem(.separator())
 
@@ -128,6 +148,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         Settings.shared.enabled.toggle()
         controller.reset()
         updateIcon()
+    }
+
+    @objc private func toggleSite() {
+        guard let site = targetSite else { return }
+        Settings.shared.setSiteExcluded(site, Settings.shared.excludedSite(covering: site) == nil)
     }
 
     @objc private func toggleApp() {

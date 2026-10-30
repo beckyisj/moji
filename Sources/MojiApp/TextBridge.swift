@@ -104,13 +104,26 @@ enum BrowserTab {
     static func hasOwnPicker(pid: pid_t) -> Bool {
         let app = AXUIElementCreateApplication(pid)
         AXUIElementSetMessagingTimeout(app, 0.1)
-        if let host = focusedURL(app)?.host?.lowercased() {
-            return Settings.excludedSites.contains { host == $0 || host.hasSuffix("." + $0) }
+        if let host = host(of: app) {
+            return Settings.shared.excludedSite(covering: host) != nil
         }
         guard let window: AXUIElement = attribute(app, kAXFocusedWindowAttribute),
               let title: String = attribute(window, kAXTitleAttribute) else { return false }
         let t = title.lowercased()
         return Settings.excludedTitleMarkers.contains { t.contains($0) }
+    }
+
+    /// The focused tab's host without "www.", e.g. "x.com". Nil when the browser doesn't expose the URL.
+    static func currentHost(pid: pid_t) -> String? {
+        let app = AXUIElementCreateApplication(pid)
+        AXUIElementSetMessagingTimeout(app, 0.2)
+        return host(of: app)
+    }
+
+    private static func host(of app: AXUIElement) -> String? {
+        guard var host = focusedURL(app)?.host?.lowercased(), !host.isEmpty else { return nil }
+        if host.hasPrefix("www.") { host.removeFirst(4) }
+        return host
     }
 
     /// Walks up from the focused element to the web area, which carries the page URL.
